@@ -1,10 +1,13 @@
 
 #include "windows.h"
+#define GL_GLEXT_PROTOTYPES
 #include <gl/gl.h>
 
 #define function static
 #define Assert(e) {if(!e) {*((void**)(0)) = 0;}}
+#define ArrayCount(arr) (sizeof(arr)/sizeof(arr[0]))
 
+#define u8 unsigned char
 #define u16 unsigned short
 #define u32 unsigned int
 
@@ -41,11 +44,11 @@ win32_opengl_init(HWND Window, HDC WindowDC)
 }
 
 
-LRESULT CALLBACK WindowProc(HWND   hwnd,
-                            UINT   msg,
-                            WPARAM wParam,
-                            LPARAM lParam
-                            )
+function LRESULT CALLBACK WindowProc(HWND   hwnd,
+                                     UINT   msg,
+                                     WPARAM wParam,
+                                     LPARAM lParam
+                                     )
 {
     
     switch(msg) {
@@ -77,7 +80,7 @@ LRESULT CALLBACK WindowProc(HWND   hwnd,
     return DefWindowProc(hwnd, msg, wParam, lParam);;
 }
 
-HWND create_main_window(HINSTANCE hInst, float WindowWidth, float WindowHeight)
+function HWND create_main_window(HINSTANCE hInst, float WindowWidth, float WindowHeight)
 {
     WCHAR *class_name = L"opengl_window";
     
@@ -128,8 +131,33 @@ int CALLBACK  WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cm
         UpdateWindow(hwnd); 
         
         glViewport(0, 0, (GLsizei)WindowWidth, (GLsizei)WindowHeight);
-        glClearColor(1.0f, 1.0f, 0.3f, 0.0f);
+        //glClearColor(1.0f, 1.0f, 0.3f, 0.0f);
         
+        GLuint TextureHandle = 0;
+        glGenTextures(1, &TextureHandle);
+        
+        const u32 width = 200;
+        const u32 height = 200;
+        
+        u32 r = 0;
+        u32 g = 0;
+        u32 b = 128;
+        u32 a = 0;
+        
+        u32 image_buffer[width * height]= {0};
+        
+        // generate some bitmap
+        u32 *p = image_buffer;
+        for (int i = 0; i < width; ++i)
+            for (int j = 0; j < height; ++j)
+        {
+            r = i % 256;
+            g = j % 256;
+            a = ((i + j) / 2) % 256;
+            
+            u32 bgra =  b | g << 8 | r << 16 | a << 24;
+            *p++ = bgra;
+        }
         
         // Start the message loop. 
         MSG msg;
@@ -142,19 +170,79 @@ int CALLBACK  WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cm
                     // TODO: handle opengl resize
                     WindowWidth = LOWORD(msg.lParam);
                     WindowHeight = HIWORD(msg.lParam);
-                    glViewport(0, 0, (GLsizei)WindowWidth, (GLsizei)WindowHeight);
+                    //glViewport(0, 0, (GLsizei)WindowWidth, (GLsizei)WindowHeight);
                 }
             }
             
+            
+            glBindTexture(GL_TEXTURE_2D, TextureHandle);
+            glTexImage2D(GL_TEXTURE_2D,
+                         0,
+                         GL_RGBA8,
+                         width,
+                         height,
+                         0,
+                         GL_BGRA_EXT,
+                         GL_UNSIGNED_BYTE,
+                         &image_buffer);
+            
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP );
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP );
+            
+            glTexEnvi(GL_TEXTURE_ENV,
+                      GL_TEXTURE_ENV_MODE,
+                      GL_MODULATE);
+            
+            glEnable(GL_TEXTURE_2D);
+            
+            glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT);
             
+            // Any point will transform by multiply  vertext * modelview * projection
+            // we make it look like multiply by 1
+            glMatrixMode(GL_TEXTURE);
+            glLoadIdentity();
+            
+            glMatrixMode(GL_MODELVIEW);
+            glLoadIdentity();
+            
+            glMatrixMode(GL_PROJECTION);
+            glLoadIdentity();
+            
+            
+#if 0
             glBegin(GL_POLYGON);
             glColor3f(1, 0, 0); glVertex3f(-0.6f, -0.75f, 0.5f);
             glColor3f(0, 1, 0); glVertex3f(0.6f, -0.75f, 0);
             glColor3f(0, 0, 1); glVertex3f(0, 0.75f, 0);
             glEnd();
+#endif
             
-            glFlush();
+            glBegin(GL_TRIANGLES);
+            float c = 0.1f;
+            float p = 1.0f;
+            //glColor3f(c, c * 2, c * 3);
+            glTexCoord2f(0.0f, 0.0f);
+            glVertex2f(-p, -p);
+            glTexCoord2f(1.0f, 0.0f);
+            glVertex2f(p, -p);
+            glTexCoord2f(1.0f, 1.0f);
+            glVertex2f(p, p);
+            
+            
+            c += 0.1f;
+            //glColor3f(c, c * 2, c * 3);
+            glTexCoord2f(0.0f, 0.0f);
+            glVertex2f(-p, -p);
+            glTexCoord2f(1.0f, 1.0f);
+            glVertex2f(p, p);
+            glTexCoord2f(0.0f, 1.0f);
+            glVertex2f(-p, p);
+            
+            glEnd();
+            //glFlush();
             
             SwapBuffers(hdc);
             
