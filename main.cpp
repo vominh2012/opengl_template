@@ -1,15 +1,39 @@
-
 #include "windows.h"
 #define GL_GLEXT_PROTOTYPES
 #include <gl/gl.h>
+#include <stdio.h>
 
 #define function static
 #define Assert(e) {if(!e) {*((void**)(0)) = 0;}}
 #define ArrayCount(arr) (sizeof(arr)/sizeof(arr[0]))
 
+#ifdef UNICODE
+#define _T(str) L##str
+#else
+#define _T(str) str
+#endif
 #define u8 unsigned char
 #define u16 unsigned short
 #define u32 unsigned int
+
+struct PerfCounter {
+    LARGE_INTEGER frequency, start_time, end_time;
+    
+    void begin()
+    {
+        QueryPerformanceFrequency(&frequency);
+        QueryPerformanceCounter(&start_time);
+    }
+    
+    // return elapsed time in seconds
+    double end()
+    {
+        QueryPerformanceCounter(&end_time);
+        
+        return (double)(end_time.QuadPart - start_time.QuadPart) / frequency.QuadPart;
+    }
+};
+
 
 function void
 win32_opengl_init(HWND Window, HDC WindowDC)
@@ -35,7 +59,14 @@ win32_opengl_init(HWND Window, HDC WindowDC)
     HGLRC OpenGLRC = wglCreateContext(WindowDC);
     if(wglMakeCurrent(WindowDC, OpenGLRC))        
     {
+        typedef BOOL wglSwapIntervalEXT_func(int interval);
+        
         //glGenTextures(1, &TextureHandle);
+        wglSwapIntervalEXT_func* wglSwapIntervalEXT = (wglSwapIntervalEXT_func*)wglGetProcAddress("wglSwapIntervalEXT");
+        if (wglSwapIntervalEXT)
+        {
+            wglSwapIntervalEXT(1); // enable vsync
+        }
     }
     else
     {
@@ -50,7 +81,6 @@ function LRESULT CALLBACK WindowProc(HWND   hwnd,
                                      LPARAM lParam
                                      )
 {
-    
     switch(msg) {
         case WM_DESTROY: {
             PostQuitMessage(0);
@@ -82,7 +112,7 @@ function LRESULT CALLBACK WindowProc(HWND   hwnd,
 
 function HWND create_main_window(HINSTANCE hInst, float WindowWidth, float WindowHeight)
 {
-    WCHAR *class_name = L"opengl_window";
+    TCHAR *class_name = _T("opengl_window");
     
     WNDCLASS wc = { };
     wc.lpfnWndProc   = WindowProc;
@@ -93,7 +123,7 @@ function HWND create_main_window(HINSTANCE hInst, float WindowWidth, float Windo
     HWND hwnd_parent = 0;
     HWND hwnd = CreateWindow(
                              class_name,
-                             L"opengl_tpl_class",
+                             _T("opengl_tpl_class"),
                              WS_OVERLAPPEDWINDOW,
                              CW_USEDEFAULT,
                              CW_USEDEFAULT,
@@ -163,6 +193,10 @@ int CALLBACK  WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cm
         MSG msg;
         while( (GetMessage( &msg, NULL, 0, 0 )) != 0)
         { 
+            
+            PerfCounter perf = {};
+            perf.begin();
+            
             switch(msg.message)
             {
                 case WM_SIZE:
@@ -248,6 +282,11 @@ int CALLBACK  WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cm
             
             TranslateMessage(&msg); 
             DispatchMessage(&msg); 
+            
+            double elapsed = perf.end();
+            TCHAR window_title[256] = {};
+            sprintf_s(window_title, _T("FrameTime: %f s"), elapsed);
+            SetWindowText(hwnd, window_title);
         } 
         
         ReleaseDC(hwnd, hdc);
